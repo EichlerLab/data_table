@@ -39,6 +39,12 @@ rule vcf_write_vcf:
 
             df['POS'] += 1
 
+        # Support renaming '#CHROM' to 'CHROM'
+
+        if 'CHROM' in df.columns and '#CHROM' not in df.columns:
+            df['#CHROM'] = df['CHROM']
+
+
         ### Set format fields ###
 
         info_header_list = list()
