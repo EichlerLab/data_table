@@ -6,9 +6,11 @@ Build base variant table.
 # Definitions
 #
 
-def _dtab_base_table_chrom_mem(wildcards):
+CHROM_PARTITIONS = 20
+
+def _dtab_base_table_part_mem(wildcards):
     """
-    Get memory requirements for the initial (per chromosome) data table resources.
+    Get memory requirements for the initial (per chromosome partition) data table resources.
 
     :param wildcards: Rule wildcards.
 
@@ -408,20 +410,20 @@ rule dtab_base_callable:
 rule dtab_base_table_merge_table:
     input:
         bed_base=expand(
-            'temp/sections/{{tab_name}}/base_table/base_table_{{vartype}}_{{svtype}}/{chrom}.bed.gz',
-            chrom=svpoplib.ref.get_df_fai(config['reference'] + '.fai').index
+            'temp/sections/{{tab_name}}/base_table/base_table_{{vartype}}_{{svtype}}/{part}.bed.gz',
+            part=range(CHROM_PARTITIONS)
         ),
         id_list=expand(
-            'temp/sections/{{tab_name}}/base_table/id_list_{{vartype}}_{{svtype}}/{chrom}.txt.gz',
-            chrom=svpoplib.ref.get_df_fai(config['reference'] + '.fai').index
+            'temp/sections/{{tab_name}}/base_table/id_list_{{vartype}}_{{svtype}}/{part}.txt.gz',
+            part=range(CHROM_PARTITIONS)
         ),
         sample_pkl=expand(
-            'temp/sections/{{tab_name}}/base_table/sample_set_{{vartype}}_{{svtype}}/{chrom}.pkl',
-            chrom=svpoplib.ref.get_df_fai(config['reference'] + '.fai').index
+            'temp/sections/{{tab_name}}/base_table/sample_set_{{vartype}}_{{svtype}}/{part}.pkl',
+            part=range(CHROM_PARTITIONS)
         ),
         merge_map=expand(
-            'temp/sections/{{tab_name}}/base_table/merge_map_{{vartype}}_{{svtype}}/{chrom}.tsv.gz',
-            chrom=svpoplib.ref.get_df_fai(config['reference'] + '.fai').index
+            'temp/sections/{{tab_name}}/base_table/merge_map_{{vartype}}_{{svtype}}/{part}.tsv.gz',
+            part=range(CHROM_PARTITIONS)
         ),
         tsv_id_table=lambda wildcards: dtablib.dtabutil.get_table_def(wildcards.tab_name, config)['id_table'] if 'id_table' in dtablib.dtabutil.get_table_def(wildcards.tab_name, config) else []
     output:
@@ -521,24 +523,32 @@ rule dtab_base_table_merge_table:
 
         df.to_csv(output.bed_base, sep='\t', index=False, compression='gzip')
 
-# dtab_base_table
+# dtab_base_table_part
 #
 # Make base table annotation columns will be attached to.
-rule dtab_base_table_chrom:
+rule dtab_base_table_part:
     input:
-        bed=lambda wildcards: dtablib.base_table.get_input_bed(wildcards, config)
+        bed=lambda wildcards: dtablib.base_table.get_input_bed(wildcards, config),
+        tsv_ref_info='data/ref/contig_info.tsv.gz'
     output:
-        bed_base=temp('temp/sections/{tab_name}/base_table/base_table_{vartype}_{svtype}/{chrom}.bed.gz'),
-        id_list=temp('temp/sections/{tab_name}/base_table/id_list_{vartype}_{svtype}/{chrom}.txt.gz'),
-        sample_pkl=temp('temp/sections/{tab_name}/base_table/sample_set_{vartype}_{svtype}/{chrom}.pkl'),
-        merge_map=temp('temp/sections/{tab_name}/base_table/merge_map_{vartype}_{svtype}/{chrom}.tsv.gz')
+        bed_base=temp('temp/sections/{tab_name}/base_table/base_table_{vartype}_{svtype}/{part}.bed.gz'),
+        id_list=temp('temp/sections/{tab_name}/base_table/id_list_{vartype}_{svtype}/{part}.txt.gz'),
+        sample_pkl=temp('temp/sections/{tab_name}/base_table/sample_set_{vartype}_{svtype}/{part}.pkl'),
+        merge_map=temp('temp/sections/{tab_name}/base_table/merge_map_{vartype}_{svtype}/{part}.tsv.gz')
     params:
-        mem=_dtab_base_table_chrom_mem
+        mem=_dtab_base_table_part_mem
     run:
 
         table_def = dtablib.dtabutil.get_table_def(wildcards.tab_name, config)
 
         sourcetype = table_def['sourcetype']
+
+        # Get chromosomes in this partition
+        df_ref = pd.read_csv(input.tsv_ref_info, sep='\t')
+
+        df_ref = df_ref.loc[df_ref['PARTITION'] == int(wildcards.part)]
+
+        chrom_set = set(df_ref['CHROM'])
 
         # Read
         df_list = list()
@@ -546,7 +556,7 @@ rule dtab_base_table_chrom:
         df_iter = pd.read_csv(input.bed, sep='\t', low_memory=False, iterator=True, chunksize=20000)
 
         for df in df_iter:
-            df = df.loc[df['#CHROM'] == wildcards.chrom]
+            df = df.loc[df['#CHROM'].isin(chrom_set)]
 
             if df.shape[0] > 0:
                 df_list.append(df)
@@ -657,3 +667,39 @@ rule dtab_base_table_chrom:
         df.to_csv(output.bed_base, sep='\t', index=False, compression='gzip')
 
         df_sample_map.to_csv(output.merge_map, sep='\t', index=True, compression='gzip')
+
+# data_ref_contig_table
+#
+# Contig table.
+rule base_reference_contig_table:
+    output:
+        tsv_ref_info='data/ref/contig_info.tsv.gz'
+    params:
+        partitions=CHROM_PARTITIONS
+    run:
+
+        # Get contig info
+        df = svpoplib.ref.get_ref_info(
+            config['reference']
+        )
+
+        # Add partition info
+        partitions = svpoplib.partition.chrom.partition(df['LEN'], params.partitions)
+
+        df['PARTITION'] = -1
+
+        for index in range(len(partitions)):
+            for chrom in partitions[index]:
+                if df.loc[chrom, 'PARTITION'] != -1:
+                    raise RuntimeError(f'Chromosome {chrom} assigned to multiple partitions')
+                df.loc[chrom, 'PARTITION'] = index
+
+        missing_list = list(df.loc[df['PARTITION'] == -1].index)
+
+        if missing_list:
+            raise RuntimeError(f'Failed assigning {len(missing_list)} chromosomes to partitions: {", ".join(missing_list)}')
+
+        # Write
+        df.to_csv(
+            output.tsv_ref_info, sep='\t', index=True, compression='gzip'
+        )

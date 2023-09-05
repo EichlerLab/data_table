@@ -12,7 +12,7 @@ SECTION_DICT = {
     'refseq': ['sections/{tab_name}/genes/refseq-intersect_{vartype}_{svtype}.tsv.gz'],
     'refseq_prox': lambda params: ['sections/{{tab_name}}/genes/refseq-prox-{params}_{{vartype}}_{{svtype}}.tsv.gz'.format(params=params)],
     'ref_sd': ['sections/{tab_name}/regions/sd_{vartype}_{svtype}.tsv.gz'],
-    'ref_trf': ['sections/{tab_name}/regions/trf_{vartype}_{svtype}.tsv.gz'],
+    'ref_trf': lambda params: ['sections/{{tab_name}}/regions/trf-{params}_{{vartype}}_{{svtype}}.tsv.gz'.format(params=params)],
     'encode': ['sections/{tab_name}/regions/encode_{vartype}_{svtype}.tsv.gz'],
     'dhs2020': ['sections/{tab_name}/regions/dhs2020_{vartype}_{svtype}.tsv.gz'],
     'ccre2020': ['sections/{tab_name}/regions/ccre2020_{vartype}_{svtype}.tsv.gz'],
@@ -48,10 +48,10 @@ def get_table_def(tab_name, config):
 
     # Split table name into name and wildcards ('-' delimited)
     tab_name_org = tab_name
-    tab_name_tok = tab_name.split('-')
+    tab_name_tok = tab_name.split('-', 1)
 
     config_section_name = tab_name_tok[0]
-    wildcard_list = tab_name_tok[1:]
+    wildcard_list_str = tab_name_tok[1] if len(tab_name_tok) > 1 else None
 
     # Find table definition
     if 'table_def' not in config:
@@ -79,12 +79,18 @@ def get_table_def(tab_name, config):
     table_def['config_section_name'] = config_section_name
 
     # Set wildcards
-    if wildcard_list:
+    if wildcard_list_str is not None:
+
+        # Check the list string
+        wildcard_list_str = wildcard_list_str.strip()
+
+        if not wildcard_list_str:
+            raise RuntimeError('Config scetion has a name ending in "-" (ambiguous for wildcards)')
 
         # Check lists
         if 'wildcard_list' not in table_def:
-            raise RuntimeError('Table name "{}" has {} wildcards ("-" delimited), but table definition "{}" does not contain a "wildcard_list" element'.format(
-                tab_name_org, len(wildcard_list), config_section_name
+            raise RuntimeError('Table name "{}" has wildcards ("-" delimited), but table definition "{}" does not contain a "wildcard_list" element'.format(
+                tab_name_org, config_section_name
             ))
 
         if not issubclass(table_def['wildcard_list'].__class__, list):
@@ -92,10 +98,15 @@ def get_table_def(tab_name, config):
                 config_section_name
             ))
 
+        wildcard_list = wildcard_list_str.split(
+            table_def.get('wildcard_delim', '-'),
+            table_def.get('wildcard_limit', len(table_def['wildcard_list']))
+        )
+
         if len(wildcard_list) != len(table_def['wildcard_list']):
             raise RuntimeError(
                 'Wildcard length mismatch for {}: Found {} wildcards in table name but definition "{}" has {} elements'.format(
-                    tab_name_org, len(wildcard_list), config_section_name, len(table_def['wildcards'])
+                    tab_name_org, len(wildcard_list), config_section_name, len(table_def['wildcard_list'])
                 ))
 
         # Set dictionary

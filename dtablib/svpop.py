@@ -38,13 +38,15 @@ def get_svpop_config(config):
         return json.load(config_in)
 
 
-def resolve_rel_path(file_name, wildcards, config):
+def resolve_rel_path(file_name, wildcards, config, param_sub=None):
     """
     Resolve a path with wildcards relative to the SV-Pop run directory.
 
     :param file_name: File name with wildcards relative to the SV-Pop run directory.
     :param wildcards: Rule wildcards.
     :param config: Data table config.
+    :param param_sub: Dictionary for substituting `wildcards.params` or a function taking a parameter and returning
+        a substituted one.
 
     :return: Resloved path.
     """
@@ -54,6 +56,14 @@ def resolve_rel_path(file_name, wildcards, config):
     fmt_dict = {}
     fmt_dict.update(table_def)
     fmt_dict.update(wildcards)
+
+    if param_sub is not None:
+        if type(param_sub) == dict:
+            fmt_dict['params'] = param_sub.get(fmt_dict['params'], fmt_dict['params'])
+        elif callable(param_sub):
+            fmt_dict['params'] = param_sub(fmt_dict['params'])
+        else:
+            raise RuntimeError(f'Bad type for parameter substitution argument "param_sub": Expected dict or callable: {type(param_sub)}')
 
     return os.path.join(config['svpop_run_dir'], file_name.format(**fmt_dict))
 

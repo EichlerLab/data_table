@@ -19,7 +19,7 @@ rule dtab_repeats_trf:
         bed_base='sections/{tab_name}/base_table/base_table_{vartype}_{svtype}.bed.gz',
         tsv=lambda wildcards: dtablib.svpop.resolve_rel_path(INTERSEQ_TRF, wildcards, config)
     output:
-        tsv='sections/{tab_name}/interseq/trf_{vartype}_{svtype}.tsv.gz'
+        tsv='sections/{tab_name}/interseq/trf-{params}_{vartype}_{svtype}.tsv.gz'
     run:
 
         # Read

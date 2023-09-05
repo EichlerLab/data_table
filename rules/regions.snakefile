@@ -3,7 +3,7 @@ Reference region annotations.
 """
 
 REGIONS_SD = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/sd/sd-max-frac_{vartype}_{svtype}.tsv.gz'
-REGIONS_TRF = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/trf/trf_regions_200_0_any_{vartype}_{svtype}.tsv.gz'
+REGIONS_TRF = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/trf/trf_regions_{params}_{vartype}_{svtype}.tsv.gz'
 REGIONS_ENCODE = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/allreg/allreg_{vartype}_{svtype}.tsv.gz'
 REGIONS_DHS2020 = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/dhs/dhs2020-1000_{vartype}_{svtype}.tsv.gz'
 REGIONS_CCRE2020 = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/ccre/ccre2020-all_{vartype}_{svtype}.tsv.gz'
@@ -200,7 +200,10 @@ rule dtab_regions_sd:
 # TRF region intersect table.
 rule dtab_regions_trf:
     input:
-        tsv=lambda wildcards: dtablib.svpop.resolve_rel_path(REGIONS_TRF, wildcards, config),
+        tsv=lambda wildcards: dtablib.svpop.resolve_rel_path(
+            REGIONS_TRF, wildcards, config,
+            param_sub=lambda param: f'200_0_{param}' if param == 'any' or re.search(r'^\d\d?', param) else param
+        ),
         id_list='sections/{tab_name}/base_table/id_list_{vartype}_{svtype}.txt.gz'
     output:
         tsv='sections/{tab_name}/regions/trf_{vartype}_{svtype}.tsv.gz'
