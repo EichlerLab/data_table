@@ -1,4 +1,4 @@
-# Data Table Configuration
+# Data Table Configuration #
 
 Configuration is in a JSON file `config/config.json`.
 
@@ -9,8 +9,8 @@ Basic example:
 
 ## Top level configuration Elements ##
 
-* svpop_dir: Directory where SV-Pop is installed.
-* svpop_run_dir: Directory where SV-Pop was run for this project. Variants and annotations are read from this location.
+### Required ###
+* svpop_dir: Directory where SV-Pop was run for this project. Variants and annotations are read from this location.
 * reference: Path to the reference FASTA file.
 * table_def: A dictionary of table definitions. One entry per variant set. Most configurations have just one entry
   in `table_def`.
@@ -20,15 +20,20 @@ Basic example:
 The name of a table definition may not contain a dash character ("-"), this is reserved for table definitions with
 wildcards (see below).
 
-* sourcetype
-* sourcename
-* sample
-* filter
-* svset
-* callable_filter
-* shift_col
-* sections
-* support
+* sourcetype: SV-Pop sourcetype wildcard.
+* sourcename: SV-Pop sourcename wildcard.
+* sample: SV-Pop sample name.
+* filter: SV-Pop filter ("all" for all variants).
+* svset: SV-Pop subset ("all" for all variants).
+* callable_filter: Path pattern to PAV callable region BED files.
+* id_table: Table of IDs to filter (must contain an ID column with a list of IDs to keep in the callset).
+* shift_col: Shift and remove columns.
+* track_tsv: A table of variant fields to retain in the BigBed tracks (if generating UCSC tracks).
+  * See "files/tracks/variant_fields.tsv" for the format and default values that do not need to be specified unless
+    they need to be overridden. The "TYPE" field is an autosql type (documentation is hard to find, but UCSC tracks
+    require it).
+* sections: Sections (see below).
+* support: Support columns.
 
 ### Table definitions with wildcards ###
 
@@ -78,12 +83,13 @@ Annotations include:
 * win-LEN: Coordinate of a window of LEN bases around the variant. LEN may be number of bases (e.g. "200") and has
   optional multipliers including "k" and "m" (e.g. "2k").
 
-### shift_col ###
+### Moving and removing columns ###
 
-Rearrange column ordering.
+* drop_cols: List of columns to remove
+* rename_cols: A dictionary of columns to rename (existing name is the key, new name is the value)
+* shift_cols: Change the order of columns. This is a list of rename rules, each applied in order.  
+  * Rename rule: A dict with keys "insert_after" and "move_cols"
+    * insert_after: Name of the column to insert after.
+    * move_cols: A list of columns to move. Will follow after the column named in "insert_after"
 
-* insert_after [string]: Columns are moved after this column.
-* move_cols [list(string)]: List of columns to move after the `insert_after` column in the order they should appear
-  after moving.
-
-
+These operations are done in the order above (delete, rename, move).

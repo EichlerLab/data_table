@@ -34,10 +34,7 @@ if os.path.isfile(RUN_CONFIG_FILE_NAME):
 # Check SVPOP_DIR
 
 if 'svpop_dir' not in config:
-    raise RuntimeError('Missing "svpop_dir" in config (path to SV-Pop pipeline installation)')
-
-if 'svpop_run_dir' not in config:
-    raise RuntimeError('Missing "svpop_run_dir" in config (path to SV-Pop run directory where data are found)')
+    raise RuntimeError('Missing "svpop_dir" in config (path to SV-Pop run directory where data are found)')
 
 if 'table_def' not in config:
     raise RuntimeError('Missing "table_def" in config (output table definitions)')
@@ -51,17 +48,14 @@ if 'reference' not in config:
 REF_FA = config['reference']
 REF_FAI = config['reference'] + '.fai'
 
-# Get run directories
-
-SVPOP_RUN_DIR = config['svpop_run_dir']
-
 
 #
 # Library imports
 #
 
-sys.path.append(config['svpop_dir'])
-sys.path.append(os.path.join(config['svpop_dir'], 'dep'))
+sys.path.append(os.path.join(DATA_TABLE_DIR, 'dep/svpop'))
+sys.path.append(os.path.join(DATA_TABLE_DIR, 'dep/svpop/dep'))
+sys.path.append(os.path.join(DATA_TABLE_DIR, 'dep/svpop/dep/ply'))
 
 import svpoplib
 import dtablib

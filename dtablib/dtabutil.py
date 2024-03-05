@@ -2,8 +2,10 @@
 Get and process table definition configs.
 """
 
+import numpy as np
 import os
 import gzip
+import re
 
 import dtablib.svpop
 
@@ -18,7 +20,7 @@ SECTION_DICT = {
     'ccre2020': ['sections/{tab_name}/regions/ccre2020_{vartype}_{svtype}.tsv.gz'],
     'oreganno': ['sections/{tab_name}/regions/oreganno_{vartype}_{svtype}.tsv.gz'],
     'win': lambda params: ['sections/{{tab_name}}/regions/ref_win_{params}_{{vartype}}_{{svtype}}.tsv.gz'.format(params=params)],
-    'band': ['{svpop_run_dir}/results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/bands/bands_{vartype}_{svtype}.tsv.gz'],
+    'band': ['{svpop_dir}/results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/bands/bands_{vartype}_{svtype}.tsv.gz'],
     'pop': lambda params: ['sections/{{tab_name}}/pop/pop_{params}_{{vartype}}_{{svtype}}.tsv.gz'.format(params=params)],
     'rmsk': ['sections/{tab_name}/interseq/rmsk_{vartype}_{svtype}.tsv.gz'],
     'trf': ['sections/{tab_name}/interseq/trf_{vartype}_{svtype}.tsv.gz'],
@@ -57,8 +59,8 @@ def get_table_def(tab_name, config):
     if 'table_def' not in config:
         raise RuntimeError('Config is missing section: table_def')
 
-    if 'svpop_run_dir' not in config:
-        raise RuntimeError('Config is missing section: svpop_run_dir')
+    if 'svpop_dir' not in config:
+        raise RuntimeError('Config is missing section: svpop_dir')
 
     if config_section_name not in config['table_def']:
         raise RuntimeError(f'No table_def config for table definition: {config_section_name}')
@@ -129,6 +131,18 @@ def get_table_def(tab_name, config):
         # Set empty list
         table_def['wildcards'] = dict()
 
+    # Get sample-hap (haplotype in sample name: e.g. SAMPLE1-h1, SAMPLE1-h2, SAMPLE2-h1, etc)
+    if 'sample_hap' in table_def.keys():
+        if table_def['sample_hap'].lower() != 'auto':
+            try:
+                table_def['sample_hap'] = dtablib.util.get_bool(table_def['sample_hap'])
+            except ValueError:
+                raise RuntimeError(f'Configuration parameter "sample_hap" is not "auto" or a boolean value: {table_def["sample_hap"]}')
+        else:
+            table_def['sample_hap'] = None
+    else:
+        table_def['sample_hap'] = None
+
     # Return table definition
     return table_def
 
@@ -175,7 +189,7 @@ def section_input_files(wildcards, config, max_tier=None):
     # Add keywords to dict
     kwd_dict = dict(wildcards)
     kwd_dict.update(table_def)
-    kwd_dict['svpop_run_dir'] = config['svpop_run_dir']
+    kwd_dict['svpop_dir'] = config['svpop_dir']
 
     # Get files for support sections
     for support_section in table_def.get('support', {}).get(varsv_type, {}):
@@ -253,9 +267,9 @@ def sample_info_file_name(tab_name, config):
     return sample_info_file
 
 
-def get_callable_bed_dict(tab_name, config, hap):
+def get_callable_bed_dict(tab_name, config):
     """
-    Get a dictionary keyed by samples to a list of BED files from "callable_filter".
+    Get a dictionary keyed by samples with haplotype appended (sample-hap) to a list of BED files from "callable_filter".
 
     :param tab_name: Target table name.
     :param config: Config.
@@ -281,16 +295,32 @@ def get_callable_bed_dict(tab_name, config, hap):
     # Setup parse_dict (wildcard parsing into bed_pattern)
     parse_dict = config.copy()
     parse_dict.update(table_def)
-    parse_dict['hap'] = hap
+    parse_dict['hap'] = None
     parse_dict['sample'] = None
+
+    # Determine if haplotype is in the sample name
+    sample_hap = table_def['sample_hap']
+
+    if sample_hap is None:
+        # Auto, determine if all samples end with a haplotype (-h1 or -h2)
+        sample_hap = [np.all(
+            re.search(r'.*-h\d+', sample) is not None for sample in sampleset_config['samples']
+        )]
 
     # Parse
     bed_dict = dict()
 
-    for sample in sampleset_config['samples']:
-        parse_dict['sample'] = sample
+    if sample_hap:
+        for sample_hap_str in sampleset_config['samples']:
+            parse_dict['sample'], parse_dict['hap'] = sample_hap_str.rsplit('-', 1)
+            bed_dict[sample_hap_str] = bed_pattern.format(**parse_dict)
+    else:
+        for sample in sampleset_config['samples']:
+            parse_dict['sample'] = sample
 
-        bed_dict[sample] = bed_pattern.format(**parse_dict)
+            for hap in ('h1', 'h2'):
+                parse_dict['hap'] = hap
+                bed_dict[f'{sample}-{hap}'] = bed_pattern.format(**parse_dict)
 
     # Return
     return bed_dict

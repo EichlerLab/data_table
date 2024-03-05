@@ -34,7 +34,7 @@ def get_svpop_config(config):
     :return: SV-Pop config dict.
     """
 
-    with open(os.path.join(config['svpop_run_dir'], 'config/config.json')) as config_in:
+    with open(os.path.join(config['svpop_dir'], 'config/config.json')) as config_in:
         return json.load(config_in)
 
 
@@ -57,7 +57,7 @@ def resolve_rel_path(file_name, wildcards, config, param_sub=None):
     fmt_dict.update(table_def)
     fmt_dict.update(wildcards)
 
-    if param_sub is not None:
+    if 'params' in fmt_dict.keys() and param_sub is not None:
         if type(param_sub) == dict:
             fmt_dict['params'] = param_sub.get(fmt_dict['params'], fmt_dict['params'])
         elif callable(param_sub):
@@ -65,7 +65,7 @@ def resolve_rel_path(file_name, wildcards, config, param_sub=None):
         else:
             raise RuntimeError(f'Bad type for parameter substitution argument "param_sub": Expected dict or callable: {type(param_sub)}')
 
-    return os.path.join(config['svpop_run_dir'], file_name.format(**fmt_dict))
+    return os.path.join(config['svpop_dir'], file_name.format(**fmt_dict))
 
 
 def get_sampleset_config(table_def, config):
@@ -124,6 +124,6 @@ def sampleset_source_dict(table_def, file_pattern, config, vartype, svtype):
     for sample in sampleset_config['samples']:
         fmt_dict['sample'] = sample
 
-        file_dict[sample] = os.path.join(config['svpop_run_dir'], file_pattern.format(**fmt_dict))
+        file_dict[sample] = os.path.join(config['svpop_dir'], file_pattern.format(**fmt_dict))
 
     return file_dict

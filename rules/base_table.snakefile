@@ -63,7 +63,7 @@ def filter_fasta(fa_file_name, id_set, verify_all=True):
 
 # rule dtab_base_fa:
 #     input:
-#         tsv='tsv/variants_{tab_name}_{vartype}_{svtype}.tsv.gz',
+#         tsv='table/variants_{tab_name}_{vartype}_{svtype}.tsv.gz',
 #         fa=lambda wildcards: dtablib.base_table.get_input_fa(wildcards, config)
 #     output:
 #         fa='fasta/variants_{tab_name}_{vartype}_{svtype}.fa.gz'
@@ -81,9 +81,9 @@ def filter_fasta(fa_file_name, id_set, verify_all=True):
 # Table to Excel.
 rule dtab_base_xlsx:
     input:
-        tsv='tsv/variants_{tab_name}_{vartype}_{svtype}.tsv.gz'
+        tsv='table/variants_{tab_name}_{vartype}_{svtype}.tsv.gz'
     output:
-        xlsx='tsv/variants_{tab_name}_{vartype}_{svtype}.xlsx'
+        xlsx='table/variants_{tab_name}_{vartype}_{svtype}.xlsx'
     run:
 
         df = pd.read_csv(
@@ -100,7 +100,7 @@ rule dtab_base_merge:
         bed_base='sections/{tab_name}/base_table/base_table_{vartype}_{svtype}.bed.gz',
         tsv_sec=lambda wildcards: dtablib.dtabutil.section_input_files(wildcards, config)
     output:
-        tsv='tsv/variants_{tab_name}_{vartype}_{svtype}.tsv.gz'
+        tsv='table/variants_{tab_name}_{vartype}_{svtype}.tsv.gz'
     run:
 
         table_def = dtablib.dtabutil.get_table_def(wildcards.tab_name, config)
@@ -184,191 +184,193 @@ rule dtab_base_merge:
 rule dtab_base_premerge_gt:
     input:
         id_list='sections/{tab_name}/base_table/id_list_{vartype}_{svtype}.txt.gz',
-        callable_h1='sections/{tab_name}/base_table/callable/callable_{vartype}_{svtype}_h1.tsv.gz',
-        callable_h2='sections/{tab_name}/base_table/callable/callable_{vartype}_{svtype}_h2.tsv.gz',
-        tsv=lambda wildcards:
-        [
-            'temp/{tab_name}/base_table/pre_merge/split/gt_{vartype}_{svtype}_{{svtype_single}}.tsv.gz'.format(
-                **wildcards
-            ).format(
-                svtype_single=svtype_single
-            )
-                for svtype_single in dtablib.definitions.SVTYPE_EXPAND[wildcards.svtype]
-        ]
+        callable='sections/{tab_name}/base_table/callable/callable_{vartype}_{svtype}.tsv.gz',
+        merge_map='sections/{tab_name}/base_table/merge_map_{vartype}_{svtype}.tsv.gz'
     output:
-        tsv='sections/{tab_name}/base_table/pre_merge/gt_{vartype}_{svtype}.tsv.gz'
+        tsv_sample='sections/{tab_name}/base_table/pre_merge/gt_sample_{vartype}_{svtype}.tsv.gz',
+        tsv_hap='sections/{tab_name}/base_table/pre_merge/gt_hap_{vartype}_{svtype}.tsv.gz'
     run:
+
+        # Get table and sample configs
+        table_def = dtablib.dtabutil.get_table_def(wildcards.tab_name, config)
+        sampleset_config = dtablib.svpop.get_sampleset_config(table_def, config)
+
+        # Determine if haplotype is in sample name
+        sample_hap = table_def['sample_hap']
+
+        if sample_hap is None:
+            # Auto, determine if all samples end with a haplotype (-h1 or -h2)
+            sample_hap = np.all([
+                re.search(r'.*-h\d+', sample) is not None for sample in sampleset_config['samples']
+            ])
+
+        # Code was updated for just sample-hap
+        if not sample_hap:
+            raise RuntimeError('Rule dtab_base_premerge_gt was updated for input with haplotypes in the sample name (e.g. SAMPLE-h1) from PAV SV-Pop with "pavbedhap" input. Code needs to be updated again for other sample input.')
 
         # Read
         id_list = dtablib.dtabutil.get_id_list(input.id_list)
 
-        # Merge GT tables
-        df_list = [pd.read_csv(file_name, sep='\t', index_col='ID') for file_name in input.tsv]
-
-        if len(df_list) > 1:
-            df = pd.concat(df_list, axis=0)
-        else:
-            df = df_list[0]
+        # Read merge map
+        df_map = pd.read_csv(input.merge_map, sep='\t', index_col='ID')
 
         # Read callable regions
-        df_callable_h1 = pd.read_csv(input.callable_h1, sep='\t', index_col='ID')
-        df_callable_h2 = pd.read_csv(input.callable_h2, sep='\t', index_col='ID')
+        df_callable = pd.read_csv(input.callable, sep='\t', index_col='ID')
 
         # Check columns and variants
-        missing_cols_h1 = set(df.columns) - set(df_callable_h1.columns)
-        missing_cols_h2 = set(df.columns) - set(df_callable_h2.columns)
+        missing_cols = set(df_map.columns) - set(df_callable.columns)
 
-        if missing_cols_h1 or missing_cols_h2:
-            missing_cols = missing_cols_h1 | missing_cols_h2
-
+        if missing_cols:
             raise RuntimeError('Missing {} column(s) in callable regions: {}{}'.format(
                 len(missing_cols), ', '.join(sorted(missing_cols)[:3]), '...' if len(missing_cols) > 3 else ''
             ))
 
-        missing_id_h1 = set(df.index) - set(df_callable_h1.index)
-        missing_id_h2 = set(df.index) - set(df_callable_h2.index)
+        missing_id = set(id_list) - set(df_map.index)
 
-        if missing_id_h1 or missing_id_h2:
-            missing_id = missing_id_h1 | missing_id_h2
-
-            raise RuntimeError('Missing {} variant ID(s) in callable regions: {}{}'.format(
+        if missing_id:
+            raise RuntimeError('Missing {} variant ID(s) in the merge map: {}{}'.format(
                 len(missing_id), ', '.join(sorted(missing_id)[:3]), '...' if len(missing_id) > 3 else ''
             ))
 
-        df_callable_h1 = df_callable_h1.loc[df.index, df.columns]
-        df_callable_h2 = df_callable_h2.loc[df.index, df.columns]
+        missing_id = set(id_list) - set(df_callable.index)
 
-        # Get genotype tables
-        df_gt_h1 = df.apply(lambda row:
-            row[~ pd.isnull(row)].apply(lambda val: val.split('|')[0]).reindex(row.index),
-           axis=0
-        )
+        if missing_id:
+            raise RuntimeError('Missing {} variant ID(s) in the callable regions: {}{}'.format(
+                len(missing_id), ', '.join(sorted(missing_id)[:3]), '...' if len(missing_id) > 3 else ''
+            ))
 
-        df_gt_h2 = df.apply(lambda row:
-            row[~ pd.isnull(row)].apply(lambda val: val.split('|')[1]).reindex(row.index),
-           axis=0
-        )
+        df_callable = df_callable.loc[id_list, df_map.columns]
+        df_map = df_map.loc[id_list]
 
-        # Fill 0 or . for missing values
-        callable_dict = {
-            'h1': df_callable_h1,
-            'h2': df_callable_h2
-        }
+        # Transform map
+        df_gt = (~ df_map.apply(pd.isnull)).astype(int)  # 1 or 0 genotype
 
-        gt_dict = {
-            'h1': df_gt_h1,
-            'h2': df_gt_h2
-        }
+        for sample in df_map.columns:
+            # Change genotype to "." if not callable
 
-        for col_name in df.columns:
-            for hap in ('h1', 'h2'):
-
-                # Get a genotype column and subset to null values
-                col = gt_dict[hap][col_name]
-                col = col.loc[pd.isnull(col)]
-
-                # Get callable loci and subset to variants in "col"
-                col_callable = callable_dict[hap][col_name].loc[col.index]
-                col_callable = col_callable.loc[col_callable]  # Subset to True values
-
-                # Set "0" on callable loci in col (was already subset to NA values)
-                col[col_callable.index] = '0'
-
-                # Fill remaining values with no-call
-                col.fillna('.', inplace=True)
-
-                # Assign missing values back to the haplotype table
-                gt_dict[hap][col_name].loc[col.index] = col
-
-        # Make genotype table
-        df_gt_list = list()
-
-        for col_name in df.columns:
-            # Join h1 and h2 genotypes into a table (one column each) and concatenate.
-            gt_col = pd.concat(
-                [gt_dict['h1'][col_name], gt_dict['h2'][col_name]],
+            df_gt[sample] = pd.concat(
+                [df_gt[sample], df_callable[sample]],
                 axis=1
             ).apply(
-                lambda vals: '|'.join(vals), axis=1
+                lambda row: row[0] if row[1] else '.',
+                axis=1
             )
 
-            gt_col.name = col_name
+        # Check haplotypes
+        hap_set = {val.rsplit('-', 1)[1] for val in df_gt.columns}
 
-            df_gt_list.append(gt_col)
+        if len(hap_set - {'h1', 'h2'}) > 0:
+            hap_list = sorted(hap_set - {'h1', 'h2'})
+            n_hap = len(hap_list)
+            hap_list_str = ', '.join(hap_list[:3])
+            elipses = '...' if n_hap > 3 else ''
 
-        df = pd.concat(df_gt_list, axis=1)
+            raise RuntimeError(f'Found {n_hap} unknown haplotypes: Only "h1" and "h2" are currently handled: {hap_list_str}{elipses}')
+
+        hap_list = sorted(hap_set)
+
+        # Get sample order
+        sample_list = list()
+
+        for sample_hap in df_gt.columns:
+            sample = sample_hap.rsplit('-', 1)[0]
+            if sample not in sample_list:
+                sample_list.append(sample)
+
+        # Create a table of per-sample genotypes
+        df_gt_sample_list = list()
+
+        for sample in sample_list:
+            gt_col_list = list()
+
+            for hap in hap_list:
+                sample_hap = f'{sample}-{hap}'
+
+                if sample_hap not in df_gt.columns:
+                    gt_col_list.append(pd.Series(['.'] * df_gt.shape[0], index=df_gt.index))
+
+                else:
+                    gt_col_list.append(df_gt[sample_hap].astype(str))
+
+            row_sample = pd.concat(gt_col_list, axis=1).apply(lambda row: '|'.join(row), axis=1)
+            row_sample.name = sample
+
+            df_gt_sample_list.append(row_sample)
+
+        df_gt_sample = pd.concat(df_gt_sample_list, axis=1)
 
         # Write
-        df.to_csv(output.tsv, sep='\t', index=True, compression='gzip')
+        df_gt_sample.to_csv(output.tsv_sample, sep='\t', index=True, compression='gzip')
+        df_gt.to_csv(output.tsv_hap, sep='\t', index=True, compression='gzip')
 
-# dtab_base_premerge_gt_by_svtype
+# # dtab_base_premerge_gt_by_svtype
+# #
+# # Make genotype table for source (pre-merged) sampleset variants.
+# rule dtab_base_premerge_gt_by_svtype:
+#     input:
+#         bed_base='sections/{tab_name}/base_table/base_table_{vartype}_{svtype}.bed.gz',
+#         merge_map='sections/{tab_name}/base_table/merge_map_{vartype}_{svtype}.tsv.gz',
+#         tsv_sample=lambda wildcards: dtablib.svpop.sampleset_source_dict(
+#             wildcards.tab_name, dtablib.svpop.VAR_PATTERN, config, wildcards.vartype, wildcards.svtype_single
+#         ).values()
+#     output:
+#         tsv=temp('temp/{tab_name}/base_table/pre_merge/split/gt_{vartype}_{svtype}_{svtype_single}.tsv.gz')
+#     wildcard_constraints:
+#         svtype_single='ins|del|inv|snv|dup|sub|rgn'
+#     run:
 #
-# Make genotype table for source (pre-merged) sampleset variants.
-rule dtab_base_premerge_gt_by_svtype:
-    input:
-        bed_base='sections/{tab_name}/base_table/base_table_{vartype}_{svtype}.bed.gz',
-        merge_map='sections/{tab_name}/base_table/merge_map_{vartype}_{svtype}.tsv.gz',
-        tsv_sample=lambda wildcards: dtablib.svpop.sampleset_source_dict(
-            wildcards.tab_name, dtablib.svpop.VAR_PATTERN, config, wildcards.vartype, wildcards.svtype_single
-        ).values()
-    output:
-        tsv=temp('temp/{tab_name}/base_table/pre_merge/split/gt_{vartype}_{svtype}_{svtype_single}.tsv.gz')
-    wildcard_constraints:
-        svtype_single='ins|del|inv|snv|dup|sub|rgn'
-    run:
-
-        # Get ID list
-        df_base = pd.read_csv(input.bed_base, sep='\t', usecols=('ID', 'SVTYPE'))
-
-        id_list = list(df_base.loc[df_base['SVTYPE'] == wildcards.svtype_single.upper(), 'ID'])
-
-        # Get dict of input files
-        source_file_dict = dtablib.svpop.sampleset_source_dict(
-            wildcards.tab_name, dtablib.svpop.VAR_PATTERN, config, wildcards.vartype, wildcards.svtype_single
-        )
-
-        # Read merge map
-        df_merge = pd.read_csv(input.merge_map, sep='\t', index_col='ID')
-
-        df_merge = df_merge.loc[id_list]
-
-        # Define a function to translate a column in df_merge from variant IDs to genotypes
-        def to_gt(sample_col):
-
-            sample_col = sample_col.dropna()
-
-            # Get sample table
-            df_sample = pd.read_csv(source_file_dict[sample_col.name], sep='\t', index_col='ID')
-
-            if 'GT' not in df_sample.columns:
-                raise RuntimeError('Missing GT column for sample "{}": {}'.format(
-                    sample_col.name,
-                    source_file_dict[sample_col.name]
-                ))
-
-            # Check for variants missing that the merge set says should come from this sample
-            missing_set = set(sample_col) - set(df_sample.index)
-
-            if missing_set:
-                raise RuntimeError('Missing {} variants for sample "{}": {}{}: {}'.format(
-                    len(missing_set),
-                    sample_col.name,
-                    ', '.join(sorted(missing_set)[:3]),
-                    '...' if len(missing_set) > 3 else '',
-                    source_file_dict[sample_col.name]
-                ))
-
-            sample_gt = df_sample.loc[list(sample_col), 'GT']
-            sample_gt.index = list(sample_col.index)
-
-            return sample_gt
-
-        df_merge_gt = df_merge.apply(to_gt, axis=0)
-
-        df_merge_gt.index.name = 'ID'
-
-        # Write
-        df_merge_gt.to_csv(output.tsv, sep='\t', index=True, compression='gzip')
+#         # Get ID list
+#         df_base = pd.read_csv(input.bed_base, sep='\t', usecols=('ID', 'SVTYPE'))
+#
+#         id_list = list(df_base.loc[df_base['SVTYPE'] == wildcards.svtype_single.upper(), 'ID'])
+#
+#         # Get dict of input files
+#         source_file_dict = dtablib.svpop.sampleset_source_dict(
+#             wildcards.tab_name, dtablib.svpop.VAR_PATTERN, config, wildcards.vartype, wildcards.svtype_single
+#         )
+#
+#         # Read merge map
+#         df_merge = pd.read_csv(input.merge_map, sep='\t', index_col='ID')
+#
+#         df_merge = df_merge.loc[id_list]
+#
+#         # Define a function to translate a column in df_merge from variant IDs to genotypes
+#         def to_gt(sample_col):
+#
+#             sample_col = sample_col.dropna()
+#
+#             # Get sample table
+#             df_sample = pd.read_csv(source_file_dict[sample_col.name], sep='\t', index_col='ID')
+#
+#             if 'GT' not in df_sample.columns:
+#                 raise RuntimeError('Missing GT column for sample "{}": {}'.format(
+#                     sample_col.name,
+#                     source_file_dict[sample_col.name]
+#                 ))
+#
+#             # Check for variants missing that the merge set says should come from this sample
+#             missing_set = set(sample_col) - set(df_sample.index)
+#
+#             if missing_set:
+#                 raise RuntimeError('Missing {} variants for sample "{}": {}{}: {}'.format(
+#                     len(missing_set),
+#                     sample_col.name,
+#                     ', '.join(sorted(missing_set)[:3]),
+#                     '...' if len(missing_set) > 3 else '',
+#                     source_file_dict[sample_col.name]
+#                 ))
+#
+#             sample_gt = df_sample.loc[list(sample_col), 'GT']
+#             sample_gt.index = list(sample_col.index)
+#
+#             return sample_gt
+#
+#         df_merge_gt = df_merge.apply(to_gt, axis=0)
+#
+#         df_merge_gt.index.name = 'ID'
+#
+#         # Write
+#         df_merge_gt.to_csv(output.tsv, sep='\t', index=True, compression='gzip')
 
 # dtab_base_callable
 #
@@ -376,28 +378,48 @@ rule dtab_base_premerge_gt_by_svtype:
 rule dtab_base_callable:
     input:
         bed_base='sections/{tab_name}/base_table/base_table_{vartype}_{svtype}.bed.gz',
-        bed_callable=lambda wildcards: dtablib.dtabutil.get_callable_bed_dict(wildcards.tab_name, config, wildcards.hap).values()
+        bed_callable=lambda wildcards: dtablib.dtabutil.get_callable_bed_dict(wildcards.tab_name, config).values()
     output:
-        tsv='sections/{tab_name}/base_table/callable/callable_{vartype}_{svtype}_{hap}.tsv.gz'
+        tsv='sections/{tab_name}/base_table/callable/callable_{vartype}_{svtype}.tsv.gz'
     run:
 
         # Read
         df = pd.read_csv(input.bed_base, sep='\t', usecols=('#CHROM', 'POS', 'END', 'ID', 'SVLEN'), index_col='ID')
 
-        callable_dict = dtablib.dtabutil.get_callable_bed_dict(wildcards.tab_name, config, wildcards.hap)
+        callable_dict = dtablib.dtabutil.get_callable_bed_dict(wildcards.tab_name, config)
+
+        # Get table and sample configs
+        table_def = dtablib.dtabutil.get_table_def(wildcards.tab_name, config)
+        sampleset_config = dtablib.svpop.get_sampleset_config(table_def, config)
+
+        # Determine if haplotype is in sample name
+        sample_hap = table_def['sample_hap']
+
+        if sample_hap is None:
+            # Auto, determine if all samples end with a haplotype (-h1 or -h2)
+            sample_hap = np.all([
+                re.search(r'.*-h\d+', sample) is not None for sample in sampleset_config['samples']
+            ])
 
         # Make callable table
         df_callable_list = list()
 
         for sample in callable_dict.keys():
-            df_sample = pd.read_csv(callable_dict[sample], sep='\t')
 
-            region_tree = dtablib.util.bed_to_tree_dict(df_sample)
+            if sample_hap:
+                sample_hap_list = [sample]
+            else:
+                sample_hap_list = ['-'.join(sample, hap) for hap in ('h1', 'h2')]
 
-            sample_callable = dtablib.util.bed_match_dict_region(df, region_tree)
-            sample_callable.name = sample
+            for sample_hap_str in sample_hap_list:
+                df_sample = pd.read_csv(callable_dict[sample_hap_str], sep='\t')
 
-            df_callable_list.append(sample_callable)
+                region_tree = dtablib.util.bed_to_tree_dict(df_sample)
+
+                sample_callable = dtablib.util.bed_match_dict_region(df, region_tree)
+                sample_callable.name = sample
+
+                df_callable_list.append(sample_callable)
 
         df_callable = pd.concat(df_callable_list, axis=1)
 
@@ -431,97 +453,42 @@ rule dtab_base_table_merge_table:
         id_list='sections/{tab_name}/base_table/id_list_{vartype}_{svtype}.txt.gz',
         sample_pkl='sections/{tab_name}/base_table/sample_set_{vartype}_{svtype}.pkl',
         merge_map='sections/{tab_name}/base_table/merge_map_{vartype}_{svtype}.tsv.gz'
+    wildcard_constraints:
+        vartype='sv|indel|rgn|sub'
     run:
+        dtablib.base_table.merge_base_table(input, output, wildcards, config)
 
-        table_def = dtablib.dtabutil.get_table_def(wildcards.tab_name, config)
-
-        ### ID list ###
-        id_set = set()
-
-        with gzip.open(output.id_list, 'wt') as out_file:
-            for file_name in input.id_list:
-                if os.stat(file_name).st_size > 0:
-                    with gzip.open(file_name, 'rt') as in_file:
-                        for line in in_file:
-                            out_file.write(line)
-                            id_set.add(line.strip())
-
-        ### Sample set PKL ###
-        obj_list = list()
-
-        for file_name in input.sample_pkl:
-            if os.stat(file_name).st_size > 0:
-                with open(file_name, 'rb') as in_file:
-                    obj_list.append(pickle.load(in_file))
-
-        if len(obj_list) == 0:
-            raise RuntimeError('Found 0 data files to merge (all empty): sample_set')
-
-        sample_set = pd.concat(obj_list, axis=0)
-
-        if set(sample_set.index) != id_set:
-            raise RuntimeError('ID set mismatch: sample_set')
-
-        sample_set.to_pickle(output.sample_pkl)
-
-        del sample_set
-
-        ### Merge Map ###
-        obj_list = list()
-
-        for file_name in input.merge_map:
-            if os.stat(file_name).st_size > 0:
-                obj_list.append(pd.read_csv(file_name, sep='\t', low_memory=False))
-
-        if len(obj_list) == 0:
-            raise RuntimeError('Found 0 data files to merge (all empty): merge_map')
-
-        df_sample_map = pd.concat(obj_list, axis=0)
-
-        if set(df_sample_map['ID']) != id_set:
-            raise RuntimeError('ID set mismatch: sample_map')
-
-        df_sample_map = df_sample_map[['ID'] + [val for val in df_sample_map.columns if val != 'ID']]
-
-        df_sample_map.to_csv(output.merge_map, sep='\t', index=False, compression='gzip')
-
-        ### BED Base ###
-        obj_list = list()
-
-        for file_name in input.bed_base:
-            if os.stat(file_name).st_size > 0:
-                obj_list.append(pd.read_csv(file_name, sep='\t', low_memory=False))
-
-        if len(obj_list) == 0:
-            raise RuntimeError('Found 0 data files to merge (all empty): bed_base')
-
-        df = pd.concat(obj_list, axis=0).sort_values(['#CHROM', 'POS'])
-
-        if set(df['ID']) != id_set:
-            raise RuntimeError('ID set mismatch: sample_map')
-
-        # Check match against id_table
-        if 'id_table' in table_def:
-
-            # Read set of IDs to retain
-            id_set = set(pd.read_csv(
-                table_def['id_table'].format(**wildcards),
-                sep='\t', usecols=('ID', ), squeeze=True
-            ))
-
-            # If retained ID set contains IDs not in the unfiltered table, error
-            id_set_missing = id_set - set(df['ID'])
-
-            if id_set_missing:
-                raise RuntimeError('Filter ID set contains {} IDs not in the original table: {}{})'.format(
-                    len(id_set_missing),
-                    ','.join(sorted(id_set_missing)[:3]),
-                    '...' if len(id_set_missing) > 3 else ''
-                ))
-
-            del id_set
-
-        df.to_csv(output.bed_base, sep='\t', index=False, compression='gzip')
+# dtab_base_table_merge_table_snv
+#
+# Merge base tables.
+rule dtab_base_table_merge_table_snv:
+    input:
+        bed_base=expand(
+            'temp/sections/{{tab_name}}/base_table/base_table_{{vartype}}_{{svtype}}/{part}.bed.gz',
+            part=range(CHROM_PARTITIONS)
+        ),
+        id_list=expand(
+            'temp/sections/{{tab_name}}/base_table/id_list_{{vartype}}_{{svtype}}/{part}.txt.gz',
+            part=range(CHROM_PARTITIONS)
+        ),
+        sample_pkl=expand(
+            'temp/sections/{{tab_name}}/base_table/sample_set_{{vartype}}_{{svtype}}/{part}.pkl',
+            part=range(CHROM_PARTITIONS)
+        ),
+        merge_map=expand(
+            'temp/sections/{{tab_name}}/base_table/merge_map_{{vartype}}_{{svtype}}/{part}.tsv.gz',
+            part=range(CHROM_PARTITIONS)
+        ),
+        tsv_id_table=lambda wildcards: dtablib.dtabutil.get_table_def(wildcards.tab_name, config)['id_table'] if 'id_table' in dtablib.dtabutil.get_table_def(wildcards.tab_name, config) else []
+    output:
+        bed_base='sections/{tab_name}/base_table/base_table_{vartype}_{svtype}.bed.gz',
+        id_list='sections/{tab_name}/base_table/id_list_{vartype}_{svtype}.txt.gz',
+        sample_pkl='sections/{tab_name}/base_table/sample_set_{vartype}_{svtype}.pkl',
+        merge_map='sections/{tab_name}/base_table/merge_map_{vartype}_{svtype}.tsv.gz'
+    wildcard_constraints:
+        vartype='snv'
+    run:
+        dtablib.base_table.merge_base_table(input, output, wildcards, config)
 
 # dtab_base_table_part
 #

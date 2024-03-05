@@ -7,8 +7,8 @@ Write VCFs.
 # Make VCF headers.
 rule vcf_write_vcf:
     input:
-        tsv='tsv/variants_{tab_name}_{vartype}_{svtype}.tsv.gz',
-        tsv_gt='sections/{tab_name}/base_table/pre_merge/gt_{vartype}_{svtype}.tsv.gz',
+        tsv='table/variants_{tab_name}_{vartype}_{svtype}.tsv.gz',
+        tsv_gt='sections/{tab_name}/base_table/pre_merge/gt_sample_{vartype}_{svtype}.tsv.gz',
         ref_tsv='data/ref/contig_info.tsv.gz'
     output:
         vcf='vcf/variants_{tab_name}_{vartype}_{svtype}_{alt_fmt}.vcf.gz'
@@ -115,7 +115,7 @@ rule vcf_write_vcf:
                 info_element[index].append(f'REF_SD={element:.2f}')
 
         if 'REF_TRF' in df.columns:
-            info_header_list.append(('REF_TRF', '.', 'Flag', 'Variant intersects a reference TRF region'))
+            info_header_list.append(('REF_TRF', '0', 'Flag', 'Variant intersects a reference TRF region'))
 
             for val in df.loc[df['REF_TRF']].index:
                 info_element[val].append('REF_TRF')
@@ -149,7 +149,7 @@ rule vcf_write_vcf:
 
             # Find FA file by first parsing in config elements, then wildcards
             seq_fa_file = os.path.join(
-                config['svpop_run_dir'],
+                config['svpop_dir'],
                 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/bed/fa/{{vartype}}_{{svtype}}.fa.gz'.format(
                     **table_def
                 ).format(**wildcards)

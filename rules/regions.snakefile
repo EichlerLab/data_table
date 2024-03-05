@@ -202,11 +202,11 @@ rule dtab_regions_trf:
     input:
         tsv=lambda wildcards: dtablib.svpop.resolve_rel_path(
             REGIONS_TRF, wildcards, config,
-            param_sub=lambda param: f'200_0_{param}' if param == 'any' or re.search(r'^\d\d?', param) else param
+            param_sub=lambda params: f'200_0_{params}' if params == 'any' or re.search(r'^\d\d?$', params) else params
         ),
         id_list='sections/{tab_name}/base_table/id_list_{vartype}_{svtype}.txt.gz'
     output:
-        tsv='sections/{tab_name}/regions/trf_{vartype}_{svtype}.tsv.gz'
+        tsv='sections/{tab_name}/regions/trf-{params}_{vartype}_{svtype}.tsv.gz'
     run:
         df = pd.read_csv(input.tsv, sep='\t', squeeze=False)
         id_list = dtablib.dtabutil.get_id_list(input.id_list)

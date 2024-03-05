@@ -42,17 +42,11 @@ rule dtab_sup_tag_support:
         if support_type is None:
             raise RuntimeError(f'Missing "type" from support config for {wildcards.support_section}')
 
-        if support_type == 'svpopinter':
+        if support_type in {'svpopinter', 'svpopinter-striphap'}:
             df_support = dtablib.support.get_support_svpopinter_lead(id_set, input_dict, conf_support['column-name'])
 
         elif support_type == 'subseq':
             df_support = dtablib.support.get_support_subseq_lead(id_set, input_dict, conf_support['column-name'])
-
-        elif support_type == 'rausch_bkpt':
-            df_support = dtablib.support.get_support_rauschbkpt_lead(id_set, input_dict, conf_support['column-name'])
-
-        elif support_type == 'rausch_win':
-            df_support = dtablib.support.get_support_rauschwin_lead(id_set, input_dict, conf_support['column-name'])
 
         elif support_type == 'table':
             df_support = dtablib.support.get_support_table_lead(id_set, input_dict, conf_support['column-name'], conf_support)
@@ -61,7 +55,7 @@ rule dtab_sup_tag_support:
             df_support = pd.read_csv(conf_support['path'].format(**wildcards), sep='\t', low_memory=False)
 
         else:
-            raise RuntimeError(f'Unkown "type" from support config for {wildcards.support_section}: {support_type}')
+            raise RuntimeError(f'Unknown "type" from support config for {wildcards.support_section}: {support_type}')
 
         # Reformat columns
         if 'usecols' in conf_support:

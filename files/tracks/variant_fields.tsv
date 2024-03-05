@@ -4,55 +4,11 @@ POS	uint		chromStart	Start position	Start position
 END	uint		chromEnd	End position	End position
 ID	string		name	Variant ID	Variant ID
 SCORE	uint		score	Score	Score
-STRAND	char[1]		strand	+ or - for strand	Strand
+STRAND	char[1]		strand	#NAME?	Strand
 POS_THICK	uint		thickStart	Coding region start	Coding region start
 END_THICK	uint		thickEnd	Coding region end	Coding region end
-COL	uint		reserved	Blue (insertion), red (deletion), green (inversion)	Blue (insertion), red (deletion), green (inversion)
+COL	uint		reserved	"Blue (insertion), red (deletion), green (inversion)"	"Blue (insertion), red (deletion), green (inversion)"
 SVTYPE	string		svType	SV Type	Variant type
 SVLEN	uint	0	svLen	SV Length	Variant size
-HAP	string		hap	Source haplotype (lead sample)	Lead sample haplotype list (semi-colon delimited)
-CALL_SOURCE	lstring		callSrc	PAV module (lead sample)	PAV calling method in the lead sample.
-TIG_REGION	lstring		tigRgn	Tig region (lead sample)	Contig region in lead sample.
-QUERY_STRAND	string		qryStrand	Query strand (lead sample)	
-ALIGN_INDEX	string		alnIndex	Align index (lead sample)	
-MERGE_AC	uint	0	mergeAc	Number of samples with variant	
-MERGE_SAMPLES	lstring		mergeSamples	Samples with variant	
-DISC_CLASS	string		discClass	Discovery class	
-PBSV	lstring		pbsv	PBSV support	
-BIONANO	lstring		bionano	Bionano support	
-DEEPVARIANT	lstring		deepvar	DeepVariant support	
-GATK	lstring		gatk	GATK support	
-LONGSHOT	lstring		longshot	LongShot support	
-PAVLRA	lstring		pavlra	PAV-LRA support	
-VAL	string		val	Subseq (HiFi)	
-MER_BKPT_NONREF	float	0.0	merBkptNref	Non-ref bkpt prop.	
-MER_BKPT_MISSING	float	0.0	merBkptMsng	Missing bkpt prop.	
-MER_10K_NONREF	uint	0	mer10kNref	Non-ref 10k win	
-MER_10K_MISSING	uint	0	mer10kMsng	Missing 10k win	
-LRA_ASM	lstring		lraCigarAsm	LRA CIGAR (Assembly)	
-REF_SD	float	0	refSd	Max SD intersect	
-REF_TRF	string		refTrf	TRF intersect	
-RMSK	lstring		rmsk	RMSK	
-TRF_COPIES	lstring		trfCopies	TRF copies	
-TRF_PFCT_N	uint	0	trfPfctN	TRF perfect N	
-TRF_PFCT_BP	uint	0	trfPfctBp	TRF perfect bp	
-REFSEQ_CDS	lstring		refseqCds	RefSeq CDS	
-REFSEQ_NCRNA	lstring		refseqNcrna	RefSeq ncRNA	
-REFSEQ_UTR3	lstring		refseqUtr3	RefSeq 3' UTR	
-REFSEQ_UTR5	lstring		refseqUtr5	RefSeq 5' UTR	
-REFSEQ_INTRON	lstring		refseqIntron	RefSeq Intron	
-REFSEQ_UP	lstring		refseqProxUp	RefSeq 2k upstream	
-REFSEQ_DN	lstring		refseqProxDn	RefSeq 2k downstream	
-ENCODE	lstring		encode	ENCODE	
-CPG	lstring		cpg	CPG	
-OREG_GENE	lstring		oregGene	ORegAnno Gene	
-OREG_ELEMENT	lstring		oregElement	ORegAnno Reg. Element	
-OREG_CTCF	lstring		oregCtcf	ORegAnno CTCF	
-TANDEM_DUP	lstring		tandem	Tandem	
-GC_CONTENT	float	0.0	gcContent	GC Content	
-POP_ALL_AN	uint		popDiscAllAn	Pop AN (All)	
-POP_ALL_AC	uint		popDiscAllAc	Pop AC (All)	
-POP_AFR_AN	uint		popDiscAfrAn	Pop AN (AFR)	
-POP_AFR_AC	uint		popDiscAfrAc	Pop AC (AFR)	
-POP_NAFR_AN	uint		popDiscNafrAn	Pop AN (Non-AFR)	
-POP_NAFR_AC	uint		popDiscNafrAc	Pop AC (Non-AFR)	
+REF	lstring		ref	Reference base/sequence	
+ALT	lstring		alt	Alternate base/sequence	
