@@ -201,12 +201,8 @@ rule dtab_base_premerge_gt:
         if sample_hap is None:
             # Auto, determine if all samples end with a haplotype (-h1 or -h2)
             sample_hap = np.all([
-                re.search(r'.*-h\d+', sample) is not None for sample in sampleset_config['samples']
+                re.search(r'.*-.+$', sample) is not None for sample in sampleset_config['samples']
             ])
-
-        # Code was updated for just sample-hap
-        if not sample_hap:
-            raise RuntimeError('Rule dtab_base_premerge_gt was updated for input with haplotypes in the sample name (e.g. SAMPLE-h1) from PAV SV-Pop with "pavbedhap" input. Code needs to be updated again for other sample input.')
 
         # Read
         id_list = dtablib.dtabutil.get_id_list(input.id_list)
@@ -259,13 +255,13 @@ rule dtab_base_premerge_gt:
         # Check haplotypes
         hap_set = {val.rsplit('-', 1)[1] for val in df_gt.columns}
 
-        if len(hap_set - {'h1', 'h2'}) > 0:
-            hap_list = sorted(hap_set - {'h1', 'h2'})
-            n_hap = len(hap_list)
-            hap_list_str = ', '.join(hap_list[:3])
-            elipses = '...' if n_hap > 3 else ''
-
-            raise RuntimeError(f'Found {n_hap} unknown haplotypes: Only "h1" and "h2" are currently handled: {hap_list_str}{elipses}')
+        # if len(hap_set - {'h1', 'h2'}) > 0:
+        #     hap_list = sorted(hap_set - {'h1', 'h2'})
+        #     n_hap = len(hap_list)
+        #     hap_list_str = ', '.join(hap_list[:3])
+        #     elipses = '...' if n_hap > 3 else ''
+        #
+        #     raise RuntimeError(f'Found {n_hap} unknown haplotypes: Only "h1" and "h2" are currently handled: {hap_list_str}{elipses}')
 
         hap_list = sorted(hap_set)
 
@@ -398,7 +394,8 @@ rule dtab_base_callable:
         if sample_hap is None:
             # Auto, determine if all samples end with a haplotype (-h1 or -h2)
             sample_hap = np.all([
-                re.search(r'.*-h\d+', sample) is not None for sample in sampleset_config['samples']
+                '-' in sample for sample in sampleset_config['samples']
+                #re.search(r'.*-h\d+', sample) is not None for sample in sampleset_config['samples']
             ])
 
         # Make callable table
@@ -409,7 +406,7 @@ rule dtab_base_callable:
             if sample_hap:
                 sample_hap_list = [sample]
             else:
-                sample_hap_list = ['-'.join(sample, hap) for hap in ('h1', 'h2')]
+                sample_hap_list = ['-'.join([sample, hap]) for hap in ('h1', 'h2')]
 
             for sample_hap_str in sample_hap_list:
                 df_sample = pd.read_csv(callable_dict[sample_hap_str], sep='\t')

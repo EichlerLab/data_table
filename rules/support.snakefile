@@ -51,6 +51,9 @@ rule dtab_sup_tag_support:
         elif support_type == 'table':
             df_support = dtablib.support.get_support_table_lead(id_set, input_dict, conf_support['column-name'], conf_support)
 
+        elif support_type == 'table_bool':
+            df_support = dtablib.support.get_support_table_lead_bool(id_set, input_dict, conf_support['column-name'], conf_support)
+
         elif support_type == 'preformat':
             df_support = pd.read_csv(conf_support['path'].format(**wildcards), sep='\t', low_memory=False)
 
@@ -93,8 +96,8 @@ rule dtab_sup_tag_support:
                 df_support = df_support[cols]
 
             else:
-                    usecols_class = str(conf_support['usecols'].__class__)
-                    raise RuntimeError(f'Unkown class for "usecols" in {wildcards.support_section}: {usecols_class}')
+                usecols_class = str(conf_support['usecols'].__class__)
+                raise RuntimeError(f'Unknown class for "usecols" in {wildcards.support_section}: {usecols_class}')
 
 
         # Write

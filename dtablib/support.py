@@ -25,6 +25,19 @@ def get_conf(wildcards, config):
     if conf_support is None:
         raise RuntimeError(f'No support section "{wildcards.support_section}" in config')
 
+    if isinstance(conf_support, str):
+        conf_support_name = conf_support
+
+        # Section is a name that refers to support_conf section
+        conf_support = table_def.get(
+            'support_sections', dict()
+        ).get(
+            conf_support_name, dict()
+        )
+
+        if conf_support is None:
+            raise RuntimeError(f'Support section "{wildcards.support_section}" ({wildcards.vartype}_{wildcards.svtype}) refers to a missisng pre-configured support section "{conf_support_name}" of the configuration file (expected to find in section "support_sections")')
+
     conf_support = conf_support.copy()
 
     # Check section
@@ -84,6 +97,12 @@ def get_conf(wildcards, config):
     if 'column-name' not in conf_support:
         conf_support['column-name'] = wildcards.support_section.upper()
 
+    # Get sample pattern - Find support only for samples matching this pattern
+    if 'sample-pattern' not in conf_support:
+        conf_support['sample-pattern'] = r'.*'
+
+    conf_support['sample-pattern'] = re.compile(conf_support['sample-pattern'])
+
     # Return
     return conf_support
 
@@ -129,7 +148,7 @@ def get_input_dict(wildcards, config):
         # unphased callset (right).
 
         # Check sample names
-        hap_re = re.compile(r'^(.*)-h[\d]+$')
+        hap_re = re.compile(r'^(.+)-([^-]+)$')
 
         bad_list = [
             sample for sample in sample_list if re.search(hap_re, sample) is None
@@ -148,6 +167,9 @@ def get_input_dict(wildcards, config):
         kw_dict = dict(wildcards)
 
         for sample in sample_list:
+            if re.search(conf_support['sample-pattern'], sample) is None:
+                continue
+
             kw_dict['sample_l'] = sample
             kw_dict['sample_r'] = re.search(hap_re, sample)[1]
 
@@ -168,6 +190,10 @@ def get_input_dict(wildcards, config):
         kw_dict = dict(wildcards)
 
         for sample in sample_list:
+
+            if re.search(conf_support['sample-pattern'], sample) is None:
+                continue
+
             kw_dict['sample'] = sample
 
             for svtype in dtablib.definitions.SVTYPE_EXPAND[wildcards.svtype]:
@@ -303,7 +329,7 @@ def get_support_subseq_lead(id_set, input_dict, support_col_name):
 
 def get_support_table_lead(id_set, input_dict, support_col_name, conf_support):
     """
-    Get support using a collection of pre-formatted tables (per sample, per svtype.
+    Get support using a collection of pre-formatted tables (per sample, per svtype).
 
     :param id_set: Dictionary of variant ID sets (from the base table) keyed by the sample they came from.
     :param input_dict: Dictionary of support input files keyed by the sample name.
@@ -354,6 +380,69 @@ def get_support_table_lead(id_set, input_dict, support_col_name, conf_support):
         ]
 
         df_support.columns = ['ID', support_col_name]
+
+        df_list.append(df_support)
+
+    # Merge support tables
+    if df_list:
+        df_support = pd.concat(df_list, axis=0)
+    else:
+        df_support = pd.DataFrame([], columns=['ID', support_col_name])
+
+    # Return
+    return df_support
+
+
+def get_support_table_lead_bool(id_set, input_dict, support_col_name, conf_support):
+    """
+    Get support using a collection of tables containing an ID column (per sample, per svtype).
+
+    :param id_set: Dictionary of variant ID sets (from the base table) keyed by the sample they came from.
+    :param input_dict: Dictionary of support input files keyed by the sample name.
+    :param support_col_name: Name of the column name to be added.
+    :param conf_support: Support config section.
+
+    :return: DataTable with an "ID" column (for the base IDs) and a column named `conf_support` with the variant
+        ID supporting the base variant.
+    """
+
+    if 'table_col' not in conf_support:
+        raise RuntimeError(
+            'Table config for support section {} is missing field "table_col" (name of table column to extract)'.format(
+                conf_support['name']
+            )
+        )
+
+    table_col = conf_support['table_col']
+
+    df_list = list()
+
+    for sample in id_set.keys():
+        sample_id_set = id_set[sample]
+
+        # Skip if input file list is empty
+        if not input_dict[sample]:
+            continue
+
+        # Get support and subset for matched (supported) variant calls
+        # ID_A: Variants merged into the data table
+        # ID_B: Variants from the supporting callset
+        df_support = pd.concat(
+            [pd.read_csv(in_file_name, sep='\t') for in_file_name in input_dict[sample]],
+            axis=0
+        )
+
+        if 'ID' not in df_support.columns:
+            raise RuntimeError('Missing columns in support tables for section {}: ID'.format(
+                conf_support['name']
+            ))
+
+        df_support = df_support.loc[
+            df_support['ID'].apply(lambda val: val in sample_id_set),
+            ['ID']
+        ]
+
+        df_support[support_col_name] = True
 
         df_list.append(df_support)
 
