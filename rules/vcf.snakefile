@@ -65,14 +65,14 @@ rule vcf_write_vcf:
 
         info_header_list.append(('VARTYPE', 'A', 'String', 'Variant class'))
 
-        for index, element in df['VARTYPE'].apply(lambda val: f'VARTYPE={val}').iteritems():
+        for index, element in df['VARTYPE'].apply(lambda val: f'VARTYPE={val}').items():
             info_element[index].append(element)
 
         # SVTYPE
         if 'SVTYPE' in df.columns:
             info_header_list.append(('SVTYPE', 'A', 'String', 'Variant type'))
 
-            for index, element in df['SVTYPE'].apply(lambda val: f'SVTYPE={val}').iteritems():
+            for index, element in df['SVTYPE'].apply(lambda val: f'SVTYPE={val}').items():
                 info_element[index].append(element)
 
         # SVLEN
@@ -84,34 +84,34 @@ rule vcf_write_vcf:
                 df.apply(lambda row: 'SVLEN={}'.format(
                     (-1 if row['SVTYPE'] == 'DEL' else 1) * np.abs(row['SVLEN'])
                 ), axis=1)
-            ).iteritems():
+            ).items():
                 info_element[index].append(element)
 
         # Lead sample
         if 'MERGE_SAMPLES' in df.columns:
             info_header_list.append(('SAMPLE', '.', 'String', 'Lead sample variant was called on. SV sequence, breakpoints, and contig locations come from the SV call in this sample.'))
 
-            for index, element in df['MERGE_SAMPLES'].apply(lambda val: 'SAMPLE=' + val.split(',')[0]).iteritems():
+            for index, element in df['MERGE_SAMPLES'].apply(lambda val: 'SAMPLE=' + val.split(',')[0]).items():
                 info_element[index].append(element)
 
         # TIG_REGION and QUERY_STRAND
         if 'TIG_REGION' in df.columns:
             info_header_list.append(('TIG_REGION', '.', 'String', 'Contig region of variant on an assembly (lead sample and haplotype only, may be present on other assemblies)'))
 
-            for index, element in df['TIG_REGION'].apply(lambda val: 'TIG_REGION=' + val.split(';')[0]).iteritems():
+            for index, element in df['TIG_REGION'].apply(lambda val: 'TIG_REGION=' + val.split(';')[0]).items():
                 info_element[index].append(element)
 
         if 'QUERY_STRAND' in df.columns:
             info_header_list.append(('QUERY_STRAND', '.', 'String', 'Reference strand lead contig mapped to (+ or -)'))
 
-            for index, element in df['QUERY_STRAND'].apply(lambda val: 'QUERY_STRAND=' + val.split(';')[0]).iteritems():
+            for index, element in df['QUERY_STRAND'].apply(lambda val: 'QUERY_STRAND=' + val.split(';')[0]).items():
                 info_element[index].append(element)
 
         # REF_SD and REF_TRF
         if 'REF_SD' in df.columns:
             info_header_list.append(('REF_SD', '.', 'Float', 'Max segmental duplication (SD) identity variant intersects.'))
 
-            for index, element in df.loc[~ pd.isnull(df['REF_SD']), 'REF_SD'].iteritems():
+            for index, element in df.loc[(~ pd.isnull(df['REF_SD']) & (df['REF_SD'] != '.')), 'REF_SD'].astype(float).items():
                 info_element[index].append(f'REF_SD={element:.2f}')
 
         if 'REF_TRF' in df.columns:
@@ -124,13 +124,13 @@ rule vcf_write_vcf:
         if 'HOMOP_LEN' in df.columns:
             info_header_list.append(('HOMOP_LEN', '.', 'Integer', 'Largest a reference homopolymer this variant intersects'))
 
-            for index, element in df.loc[~ pd.isnull(df['HOMOP_LEN']), 'HOMOP_LEN'].iteritems():
+            for index, element in df.loc[~ pd.isnull(df['HOMOP_LEN']), 'HOMOP_LEN'].items():
                 info_element[index].append(f'HOMOP_LEN={element:.2f}')
 
         if 'DINUCL_LEN' in df.columns:
             info_header_list.append(('DINUCL_LEN', '.', 'Integer', 'Largest a reference dinucleotide repeat this variant intersects'))
 
-            for index, element in df.loc[~ pd.isnull(df['DINUCL_LEN']), 'DINUCL_LEN'].iteritems():
+            for index, element in df.loc[~ pd.isnull(df['DINUCL_LEN']), 'DINUCL_LEN'].items():
                 info_element[index].append(f'DINUCL_LEN={element:.2f}')
 
         # Make INFO string
@@ -229,8 +229,8 @@ rule vcf_write_vcf:
         if 'QUAL' not in df.columns:
             df['QUAL'] = '.'
 
-        if 'FILTER' in df.columns:
-            raise RuntimeError('FILTER is defined in dataframe, but FILTER headers are not yet implemented')
+        # if 'FILTER' in df.columns:
+        #     raise RuntimeError('FILTER is defined in dataframe, but FILTER headers are not yet implemented')
 
         filter_header_list = list()
 
