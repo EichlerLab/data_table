@@ -4,6 +4,7 @@ Reference region annotations.
 
 REGIONS_SD = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/sd/sd-max-frac_{vartype}_{svtype}.tsv.gz'
 REGIONS_TRF = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/trf/trf_regions_{params}_{vartype}_{svtype}.tsv.gz'
+REGIONS_CEN = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/cen/cen_regions_{params}_{vartype}_{svtype}.tsv.gz'
 REGIONS_ENCODE = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/allreg/allreg_{vartype}_{svtype}.tsv.gz'
 REGIONS_DHS2020 = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/dhs/dhs2020-1000_{vartype}_{svtype}.tsv.gz'
 REGIONS_CCRE2020 = 'results/variant/{sourcetype}/{sourcename}/{sample}/{filter}/{svset}/anno/ccre/ccre2020-all_{vartype}_{svtype}.tsv.gz'
@@ -212,6 +213,28 @@ rule dtab_regions_trf:
         id_list = dtablib.dtabutil.get_id_list(input.id_list)
 
         df['REF_TRF'] = True
+        df.set_index('ID', inplace=True)
+        df = df.reindex(id_list, fill_value=False)
+
+        df.to_csv(output.tsv, sep='\t', index=True, compression='gzip')
+
+# dtab_regions_cen
+#
+# CEN region intersect table.
+rule dtab_regions_cen:
+    input:
+        tsv=lambda wildcards: dtablib.svpop.resolve_rel_path(
+            REGIONS_CEN, wildcards, config,
+            param_sub=lambda params: f'200_0_{params}' if params == 'any' or re.search(r'^\d\d?$', params) else params
+        ),
+        id_list='sections/{tab_name}/base_table/id_list_{vartype}_{svtype}.txt.gz'
+    output:
+        tsv='sections/{tab_name}/regions/cen-{params}_{vartype}_{svtype}.tsv.gz'
+    run:
+        df = pd.read_csv(input.tsv, sep='\t', squeeze=False)
+        id_list = dtablib.dtabutil.get_id_list(input.id_list)
+
+        df['REF_CEN'] = True
         df.set_index('ID', inplace=True)
         df = df.reindex(id_list, fill_value=False)
 

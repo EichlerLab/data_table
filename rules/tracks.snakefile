@@ -31,7 +31,7 @@ rule dtab_tracks_variant_bed:
         table_def = dtablib.dtabutil.get_table_def(wildcards.tab_name, config)
 
         # Read
-        df = pd.read_csv(input.tsv, sep='\t', header=0)
+        df = pd.read_csv(input.tsv, sep='\t', header=0, low_memory=False, dtype={'#CHROM': str, 'CHROM': str})
         df_fai = svpoplib.ref.get_df_fai(config['reference'] + '.fai')
 
         # Set #CHROM

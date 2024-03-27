@@ -15,6 +15,7 @@ SECTION_DICT = {
     'refseq_prox': lambda params: ['sections/{{tab_name}}/genes/refseq-prox-{params}_{{vartype}}_{{svtype}}.tsv.gz'.format(params=params)],
     'ref_sd': ['sections/{tab_name}/regions/sd_{vartype}_{svtype}.tsv.gz'],
     'ref_trf': lambda params: ['sections/{{tab_name}}/regions/trf-{params}_{{vartype}}_{{svtype}}.tsv.gz'.format(params=params)],
+    'ref_cen': lambda params: ['sections/{{tab_name}}/regions/cen-{params}_{{vartype}}_{{svtype}}.tsv.gz'.format(params=params)],
     'encode': ['sections/{tab_name}/regions/encode_{vartype}_{svtype}.tsv.gz'],
     'dhs2020': ['sections/{tab_name}/regions/dhs2020_{vartype}_{svtype}.tsv.gz'],
     'ccre2020': ['sections/{tab_name}/regions/ccre2020_{vartype}_{svtype}.tsv.gz'],

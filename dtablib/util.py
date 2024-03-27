@@ -3,8 +3,8 @@ General utilities.
 """
 
 import collections
-import numpy as np
 import intervaltree
+import string
 
 
 def bed_to_tree_dict(df_bed):
@@ -63,3 +63,28 @@ def get_bool(val):
         return False
 
     raise RuntimeError('Unrecognized value for bool conversion: {}'.format(val))
+
+def format_cards(template, **kwargs):
+    """
+    Format a string with wildcards using kwargs. Any wildcard values missing will be left in the string for the next
+    round.
+
+    Credit:
+    https://github.com/snakemake/snakemake/issues/124
+    https://stackoverflow.com/questions/11283961/partial-string-formatting
+
+    :param template: String template.
+    :param kwargs: Wildcard values.
+
+    :return: Parsed string.
+    """
+
+    class FormatDict(dict):
+        def __missing__(self, key):
+            return "{" + key + "}"
+
+    formatter = string.Formatter()
+
+    mapping = FormatDict(**kwargs)
+
+    return formatter.vformat(template, (), mapping)

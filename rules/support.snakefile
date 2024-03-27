@@ -2,7 +2,6 @@
 Tag variants by orthogonal support.
 """
 
-
 # dtab_sup_tag_support
 #
 # Get a table of variant call support from another source.

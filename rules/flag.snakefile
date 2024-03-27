@@ -9,7 +9,11 @@ def _dtab_flag_input_support_matrix(wildcards):
 
     support_section = table_def.get('support', {}).get(f'{wildcards.vartype}_{wildcards.svtype}', {})
 
-    sec_list = [sec_name for sec_name in support_section if support_section[sec_name].get('type', None) in {'svpopinter', 'svpopinter-striphap'}]
+    conf_list = [dtablib.support.get_conf(wildcards, config, section_name) for section_name in support_section.keys()]
+
+    sec_list = [
+        sec['name'] for sec in conf_list if sec.get('type', None) in {'svpopinter', 'svpopinter-striphap'}
+    ]
 
     return [
         'sections/{tab_name}/support_matrix/{vartype}_{svtype}/{support_section}.tsv.gz'.format(

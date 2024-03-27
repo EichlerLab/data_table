@@ -9,9 +9,23 @@ import re
 import dtablib
 
 
-def get_conf(wildcards, config):
+def get_conf(wildcards, config, support_section=None):
+    """
+    Get support section config.
+
+    :param wildcards: Rule wildcards.
+    :param config: Pipeline config.
+    :param support_section: Support section or `None` to read section `wildcards.support_section`.
+
+    :return: Dictionary of config.
+    """
+
+    if support_section is None:
+        support_section = wildcards.support_section
 
     table_def = dtablib.dtabutil.get_table_def(wildcards.tab_name, config)
+
+    section_wildcards = dict()  # Wildcards to parse into the path
 
     # Get section
     conf_support = table_def.get(
@@ -19,14 +33,31 @@ def get_conf(wildcards, config):
     ).get(
         f'{wildcards.vartype}_{wildcards.svtype}', dict()
     ).get(
-        wildcards.support_section, None
+        support_section, None
     )
 
     if conf_support is None:
-        raise RuntimeError(f'No support section "{wildcards.support_section}" in config')
+        raise RuntimeError(f'No support section "{support_section}" in config')
 
     if isinstance(conf_support, str):
-        conf_support_name = conf_support
+        conf_support = [conf_support]
+
+    if isinstance(conf_support, list):
+        conf_support_name = conf_support[0]
+
+        for wildcard_avp in conf_support[1:]:
+            tok = wildcard_avp.split('=', 1)
+
+            if len(tok) != 2:
+                raise RuntimeError(f'Support section "{support_section}" ({wildcards.vartype}_{wildcards.svtype}) contains a wildcard definition with no "=" (expected key=value): "{wildcard_avp}"')
+
+            tok[0] = tok[0].strip()
+            tok[1] = tok[1].strip()
+
+            if tok[0] == '':
+                raise RuntimeError(f'Support section "{support_section}" ({wildcards.vartype}_{wildcards.svtype}) contains a wildcard definition with no key (empty before "="): "{wildcard_avp}"')
+
+            section_wildcards[tok[0]] = tok[1]
 
         # Section is a name that refers to support_conf section
         conf_support = table_def.get(
@@ -36,7 +67,7 @@ def get_conf(wildcards, config):
         )
 
         if conf_support is None:
-            raise RuntimeError(f'Support section "{wildcards.support_section}" ({wildcards.vartype}_{wildcards.svtype}) refers to a missisng pre-configured support section "{conf_support_name}" of the configuration file (expected to find in section "support_sections")')
+            raise RuntimeError(f'Support section "{support_section}" ({wildcards.vartype}_{wildcards.svtype}) refers to a missisng pre-configured support section "{conf_support_name}" of the configuration file (expected to find in section "support_sections")')
 
     conf_support = conf_support.copy()
 
@@ -46,20 +77,20 @@ def get_conf(wildcards, config):
     if missing_index:
         raise RuntimeError(
             'Missing config elements for support section {}: {}'.format(
-                wildcards.support_section,
+                support_section,
                 ', '.join(sorted(missing_index))
             )
         )
 
     if 'name' in conf_support:
-        raise RuntimeError('Support section {} has reserved keyword "name"'.format(wildcards.support_section))
+        raise RuntimeError('Support section {} has reserved keyword "name"'.format(support_section))
 
-    conf_support['name'] = wildcards.support_section
+    conf_support['name'] = support_section
 
     # Check path wildcards
     if '{sample}' not in conf_support['path'] and conf_support['type'] not in {'preformat', 'svpopinter-striphap'}:
         raise RuntimeError(
-            'Support section {} "path" element is missing the "{{sample}}" wildcard'.format(wildcards.support_section)
+            'Support section {} "path" element is missing the "{{sample}}" wildcard'.format(support_section)
         )
 
     if conf_support['type'] == 'svpopinter-striphap':
@@ -70,22 +101,25 @@ def get_conf(wildcards, config):
 
         if missing_list:
             raise RuntimeError(
-                'Support section {} is missing sample wildcard(s): {}'.format(wildcards.support_section, ', '.join(missing_list))
+                'Support section {} is missing sample wildcard(s): {}'.format(support_section, ', '.join(missing_list))
             )
 
     if '{vartype}' not in conf_support['path']:
         raise RuntimeError(
-            'Support section {} "path" element is missing the "{{vartype}}" wildcard'.format(wildcards.support_section)
+            'Support section {} "path" element is missing the "{{vartype}}" wildcard'.format(support_section)
         )
 
     if '{svtype}' not in conf_support['path']:
         raise RuntimeError(
-            'Support section {} "path" element is missing the "{{svtype}}" wildcard'.format(wildcards.support_section)
+            'Support section {} "path" element is missing the "{{svtype}}" wildcard'.format(support_section)
         )
+
+    # Make support section wildcard substitutions
+    conf_support['path'] = dtablib.util.format_cards(conf_support['path'], **section_wildcards)
 
     # Make section wildcard substitutions (section has a "wildcard_list" element)
     if table_def['wildcards'] is not None and len(table_def['wildcards']) > 0:
-        conf_support['path'] = conf_support['path'].format(**table_def['wildcards'])
+        conf_support['path'] = dtablib.util.format_cards(conf_support['path'], **table_def['wildcards'])
 
     # Check allow-missing
     if 'allow-missing' in conf_support:
@@ -95,7 +129,7 @@ def get_conf(wildcards, config):
 
     # Get column name
     if 'column-name' not in conf_support:
-        conf_support['column-name'] = wildcards.support_section.upper()
+        conf_support['column-name'] = support_section.upper()
 
     # Get sample pattern - Find support only for samples matching this pattern
     if 'sample-pattern' not in conf_support:
@@ -413,8 +447,6 @@ def get_support_table_lead_bool(id_set, input_dict, support_col_name, conf_suppo
             )
         )
 
-    table_col = conf_support['table_col']
-
     df_list = list()
 
     for sample in id_set.keys():
@@ -443,6 +475,8 @@ def get_support_table_lead_bool(id_set, input_dict, support_col_name, conf_suppo
         ]
 
         df_support[support_col_name] = True
+
+        df_support = df_support.set_index('ID').reindex(sample_id_set, fill_value=False).reset_index()
 
         df_list.append(df_support)
 
