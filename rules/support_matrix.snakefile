@@ -37,9 +37,10 @@ rule dtab_sampleset_support_matrix:
 
         for sample in df_map.columns:
 
+            # Read support table
             if len(input_dict[sample]) > 0:
                 df_support = pd.concat(
-                    [pd.read_csv(in_file_name, sep='\t') for in_file_name in input_dict[sample]],
+                    [pd.read_csv(in_file_name, sep='\t', usecols=['ID_A', 'ID_B']) for in_file_name in input_dict[sample]],
                     axis=0
                 )
 
@@ -57,6 +58,15 @@ rule dtab_sampleset_support_matrix:
             df_support = df_support.set_index('ID_A')['ID_B']
             df_support.name = sample
 
+            # Translate variant ID from sample to merge
+            id_tr = df_map.loc[:, sample].reset_index()
+            #id_tr = id_tr.loc[~ pd.isnull(id_tr[sample])].set_index(sample).squeeze()
+            id_tr = id_tr.loc[~ pd.isnull(id_tr[sample])].set_index(sample)['ID']
+
+            df_support.index = [id_tr[val] if val in id_tr.index else np.nan for val in df_support.index]
+            df_support = df_support.loc[~ pd.isnull(df_support.index)]
+
+            # Add to support list
             df_list.append(df_support)
 
         df = pd.concat(df_list, axis=1).reindex(df_map.index)
